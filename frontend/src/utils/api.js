@@ -63,6 +63,12 @@ export async function safeApiRequest(url, options = {}) {
 
   // Handle HTTP error statuses
   if (!response.ok) {
+    if ((response.status === 502 || response.status === 504) && (!parsedJson || !trimmed)) {
+      throw new Error(
+        'Cannot connect to DevShield backend (502 Bad Gateway). The FastAPI server is not responding on port 8000. Please start it using: cd DevShield-AI/backend; uvicorn app.main:app --port 8000'
+      );
+    }
+
     let detailMsg = response.statusText || `Request failed with HTTP ${response.status}`;
     if (parsedJson) {
       if (typeof parsedJson.detail === 'string') {

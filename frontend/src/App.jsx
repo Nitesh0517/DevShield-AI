@@ -5,6 +5,7 @@ import CodeDiffView from './components/CodeDiffView';
 import TestRunnerPanel from './components/TestRunnerPanel';
 import HistoryDrawer from './components/HistoryDrawer';
 import { safeApiRequest } from './utils/api';
+import { generateLocalDemoAnalysis } from './utils/demoEngine';
 import {
   Sparkles,
   Bug,
@@ -70,8 +71,8 @@ export default function App() {
   };
 
   const handleAnalyze = async () => {
-    if (!code.trim() || !bugDescription.trim()) {
-      setAnalyzeError('Please provide both the Python source code and a description of the defect.');
+    if (!code.trim() && !bugDescription.trim()) {
+      setAnalyzeError('Please provide either Python source code or a description of the defect.');
       return;
     }
 
@@ -79,44 +80,65 @@ export default function App() {
     setAnalyzeError(null);
     setTestResult(null);
 
+    let data = null;
+    const finalCode = code.trim() || `# Defect specification:\n# ${bugDescription.trim()}\n`;
+    const finalBug = bugDescription.trim() || 'Analyze code for runtime defects, logic flaws, and boundary violations.';
+
     try {
-      const data = await safeApiRequest('/api/analyze', {
+      data = await safeApiRequest('/api/analyze', {
         method: 'POST',
         body: JSON.stringify({
-          code: code,
-          bug_description: bugDescription,
+          code: finalCode,
+          bug_description: finalBug,
         }),
       });
-
-      if (!data || typeof data !== 'object') {
-        throw new Error('Analysis response was empty or malformed.');
-      }
-
-      setAnalysisResult(data);
-
-      // Save to session history
-      const newHistoryItem = {
-        id: Date.now().toString(),
-        timestamp: new Date().toISOString(),
-        mode: data.mode || 'demo',
-        code: code,
-        bug_description: bugDescription,
-        summary: data.summary || 'Code Defect Analysis',
-        root_cause: data.root_cause || '',
-        severity: data.severity || 'medium',
-        relevant_code_location: data.relevant_code_location || null,
-        suggested_code: data.suggested_code || data.proposed_patch || code,
-        explanation: data.explanation || '',
-        tests: data.tests || data.suggested_unit_tests || [],
-        warnings: data.warnings || [],
-        limitations_and_uncertainty: data.limitations_and_uncertainty || [],
-      };
-      setHistory((prev) => [newHistoryItem, ...prev]);
     } catch (err) {
-      setAnalyzeError(err.message || 'An unexpected error occurred during analysis.');
-    } finally {
-      setIsAnalyzing(false);
+      console.warn('Backend API request encountered error:', err.message);
+      // If we are in Demo Mode or if backend is offline/502 Bad Gateway, gracefully fall back to local demo synthesis
+      if (
+        !health ||
+        health.status === 'offline' ||
+        health.ai_mode === 'demo' ||
+        err.message.includes('502') ||
+        err.message.includes('Cannot connect') ||
+        err.message.includes('Connection refused')
+      ) {
+        console.info('[DevShield] Running client-side deterministic demo engine.');
+        data = generateLocalDemoAnalysis(finalCode, finalBug);
+      } else {
+        setAnalyzeError(err.message || 'An unexpected error occurred during analysis.');
+        setIsAnalyzing(false);
+        return;
+      }
     }
+
+    if (!data || typeof data !== 'object') {
+      setAnalyzeError('Analysis response was empty or malformed.');
+      setIsAnalyzing(false);
+      return;
+    }
+
+    setAnalysisResult(data);
+
+    // Save to session history
+    const newHistoryItem = {
+      id: Date.now().toString(),
+      timestamp: new Date().toISOString(),
+      mode: data.mode || 'demo',
+      code: finalCode,
+      bug_description: finalBug,
+      summary: data.summary || 'Code Defect Analysis',
+      root_cause: data.root_cause || '',
+      severity: data.severity || 'medium',
+      relevant_code_location: data.relevant_code_location || null,
+      suggested_code: data.suggested_code || data.proposed_patch || finalCode,
+      explanation: data.explanation || '',
+      tests: data.tests || data.suggested_unit_tests || [],
+      warnings: data.warnings || [],
+      limitations_and_uncertainty: data.limitations_and_uncertainty || [],
+    };
+    setHistory((prev) => [newHistoryItem, ...prev]);
+    setIsAnalyzing(false);
   };
 
   const handleRunTests = async (payload) => {

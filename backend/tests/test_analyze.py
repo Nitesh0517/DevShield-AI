@@ -55,6 +55,28 @@ def test_demo_mode_behavior():
         app.dependency_overrides.clear()
 
 
+def test_index_error_short_description_scenario():
+    """
+    Tests input with short code or short description:
+    'IndexError occurs when the list has fewer than 3 elements. Need safe slice or boundary checking.'
+    Verifies that the app does not fail and returns a complete, runnable patch and test suite.
+    """
+    response = client.post(
+        "/api/analyze",
+        json={
+            "code": "items[len(items) - 3]",
+            "bug_description": "IndexError occurs when the list has fewer than 3 elements. Need safe slice or boundary checking.",
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["mode"] == "demo"
+    assert "IndexError" in data["summary"] or "IndexError" in data["root_cause"]
+    assert "[-3:]" in data["suggested_code"] or "get_last_three_items" in data["suggested_code"]
+    assert len(data["tests"]) >= 2
+    assert any("fewer" in t["name"].lower() or "slice" in t["name"].lower() for t in data["tests"])
+
+
 def test_generate_tests_endpoint():
     """Tests the dedicated test synthesis endpoint."""
     response = client.post(

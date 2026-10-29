@@ -4,31 +4,30 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 class AnalysisRequest(BaseModel):
     code: str = Field(
-        ...,
+        default="",
         description="Python source code to analyze",
-        min_length=1,
         max_length=65536,
     )
     bug_description: str = Field(
-        ...,
+        default="",
         description="Description of the bug, unexpected behavior, or requirements",
-        min_length=1,
         max_length=10000,
     )
 
-    @field_validator("code")
-    @classmethod
-    def validate_code_not_blank(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("Code snippet cannot be empty or only whitespace")
-        return v
+    @model_validator(mode="after")
+    def validate_at_least_one_provided(self) -> "AnalysisRequest":
+        code_clean = self.code.strip()
+        bug_clean = self.bug_description.strip()
 
-    @field_validator("bug_description")
-    @classmethod
-    def validate_bug_not_blank(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("Bug description cannot be empty or only whitespace")
-        return v
+        if not code_clean and not bug_clean:
+            raise ValueError("Please provide either Python source code or a defect description.")
+
+        if not code_clean:
+            self.code = f"# Defect specification:\n# {bug_clean}\n"
+        if not bug_clean:
+            self.bug_description = "Analyze code for runtime defects, logic flaws, and boundary violations."
+
+        return self
 
 
 class TestCase(BaseModel):
