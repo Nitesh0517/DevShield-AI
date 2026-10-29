@@ -4,10 +4,18 @@
  * and extracts user-friendly error messages instead of throwing uncaught SyntaxErrors.
  */
 
+const API_BASE_URL = (
+  (import.meta.env && (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL)) || ''
+).replace(/\/+$/, '');
+
 export async function safeApiRequest(url, options = {}) {
+  const fullUrl = url.startsWith('http://') || url.startsWith('https://')
+    ? url
+    : `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+
   let response;
   try {
-    response = await fetch(url, {
+    response = await fetch(fullUrl, {
       ...options,
       headers: {
         'Accept': 'application/json',
@@ -16,9 +24,9 @@ export async function safeApiRequest(url, options = {}) {
       },
     });
   } catch (networkError) {
-    console.error(`[DevShield API] Network error calling ${url}:`, networkError);
+    console.error(`[DevShield API] Network error calling ${fullUrl}:`, networkError);
     throw new Error(
-      `Cannot connect to DevShield backend (${networkError.message || 'Connection refused'}). Please ensure the FastAPI server is running on http://127.0.0.1:8000.`
+      `Cannot connect to DevShield backend (${networkError.message || 'Connection refused'}). Please ensure the FastAPI server is running.`
     );
   }
 
