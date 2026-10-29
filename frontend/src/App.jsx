@@ -371,7 +371,9 @@ export default function App() {
                       )}
                     </button>
                     <p className="text-[11px] text-center text-slate-500 mt-2">
-                      {health?.ai_mode === 'ai'
+                      {health?.ai_mode === 'gemini' || health?.ai_provider === 'gemini'
+                        ? `Live inference via Google Gemini (${health.model})`
+                        : health?.ai_mode === 'ai' || health?.ai_mode === 'nebius'
                         ? `Live inference via Nebius (${health.model})`
                         : 'Running in Demo Mode. Results synthesized offline without live API.'}
                     </p>
@@ -396,7 +398,9 @@ export default function App() {
                 {/* Mode Label Banner */}
                 <div
                   className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${
-                    analysisResult.mode === 'ai'
+                    analysisResult.mode === 'gemini'
+                      ? 'bg-cyan-950/40 border-cyan-500/40 text-cyan-200'
+                      : analysisResult.mode === 'ai' || analysisResult.mode === 'nebius'
                       ? 'bg-purple-950/40 border-purple-500/40 text-purple-200'
                       : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
                   }`}
@@ -404,13 +408,17 @@ export default function App() {
                   <div className="flex items-center gap-2.5">
                     <Cpu className="w-4 h-4 shrink-0" />
                     <span>
-                      {analysisResult.mode === 'ai' ? (
+                      {analysisResult.mode === 'gemini' ? (
                         <>
-                          <strong>Real AI Generated Result:</strong> Inferred via NVIDIA open-source model on Nebius Token Factory.
+                          <strong className="text-cyan-300">Live Gemini Response:</strong> Inferred dynamically via Google Gemini ({health?.model || 'gemini-2.5-flash'}).
+                        </>
+                      ) : analysisResult.mode === 'ai' || analysisResult.mode === 'nebius' ? (
+                        <>
+                          <strong>Real AI Generated Result:</strong> Inferred via NVIDIA model on Nebius Token Factory.
                         </>
                       ) : (
                         <>
-                          <strong>Demo Mode Active:</strong> Nebius API key is not configured. This response is an intelligent local mock.
+                          <strong>Demo Mode Active:</strong> API key is not configured. This response is an intelligent local mock.
                         </>
                       )}
                     </span>

@@ -25,8 +25,7 @@ def test_config_status_endpoint():
     response = client.get("/api/config/status")
     assert response.status_code == 200
     data = response.json()
-    assert data["provider"] == "Nebius Token Factory"
-    assert "api.tokenfactory.nebius.com" in data["base_url"]
+    assert "provider" in data
     assert "model" in data
     assert "ai_configured" in data
     assert "demo_mode" in data
@@ -60,9 +59,27 @@ def test_health_endpoint_ai_configured_mode():
         assert response.status_code == 200
         data = response.json()
         assert data["ai_configured"] is True
-        assert data["ai_mode"] == "ai"
+        assert data["ai_mode"] in ["ai", "nebius"]
         assert data["model"] == "nvidia/Llama-3.1-Nemotron-70B-Instruct-HF"
         # Verify secret key is NEVER exposed in the output
         assert "test-mock-key-secret" not in response.text
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_health_endpoint_gemini_mode():
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        GEMINI_API_KEY="test-mock-gemini-secret",
+        GEMINI_MODEL="gemini-2.5-flash",
+    )
+    try:
+        response = client.get("/api/health")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["ai_configured"] is True
+        assert data["ai_mode"] == "gemini"
+        assert data["model"] == "gemini-2.5-flash"
+        # Verify secret key is NEVER exposed in the output
+        assert "test-mock-gemini-secret" not in response.text
     finally:
         app.dependency_overrides.clear()

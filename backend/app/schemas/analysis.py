@@ -83,6 +83,24 @@ class AnalysisResponse(BaseModel):
         description="Honest engineering limitations, assumptions, and edge-case boundaries",
     )
 
+    @field_validator("warnings", "limitations_and_uncertainty", mode="before")
+    @classmethod
+    def coerce_to_list_of_strings(cls, v):
+        if isinstance(v, str):
+            return [v.strip()] if v.strip() else []
+        if isinstance(v, (list, tuple)):
+            return [str(item) for item in v]
+        return []
+
+    @field_validator("tests", "suggested_unit_tests", mode="before")
+    @classmethod
+    def coerce_tests(cls, v):
+        if isinstance(v, list):
+            return v
+        if isinstance(v, dict):
+            return [v]
+        return []
+
     @model_validator(mode="after")
     def sync_aliases(self) -> "AnalysisResponse":
         # Keep suggested_code and proposed_patch synchronized

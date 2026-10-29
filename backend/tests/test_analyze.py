@@ -352,3 +352,82 @@ def test_mutable_default_argument_analyze_endpoint():
     assert "def append_audit_log(event_name, log_entries=None):" in data["suggested_code"]
     assert any("share" in t["code"].lower() or "independent" in t["name"].lower() for t in data["tests"])
 
+
+def test_gemini_client_success():
+    """Verifies that when GEMINI_API_KEY is configured, it calls Google Gemini and returns mode='gemini'."""
+    mock_gemini_json = {
+        "mode": "gemini",
+        "summary": "Gemini detected zero division defect",
+        "root_cause": "Denominator is 0 during computation",
+        "severity": "high",
+        "relevant_code_location": "return a / b",
+        "suggested_code": "def divide(a, b):\n    return a / b if b != 0 else 0.0\n",
+        "explanation": "Guarded against division by zero",
+        "tests": [
+            {
+                "name": "test_safe_division",
+                "code": "assert divide(10, 0) == 0.0\n",
+                "expected_outcome": "pass",
+            }
+        ],
+        "warnings": ["Live Gemini model response."],
+        "limitations_and_uncertainty": ["Assumes returning 0.0 is acceptable."],
+    }
+
+    mock_response = MagicMock()
+    mock_response.text = json.dumps(mock_gemini_json)
+
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        GEMINI_API_KEY="test-gemini-key",
+    )
+    try:
+        with patch("google.genai.Client") as mock_client_cls:
+            mock_client_instance = MagicMock()
+            mock_client_cls.return_value = mock_client_instance
+            mock_client_instance.models.generate_content.return_value = mock_response
+
+            response = client.post(
+                "/api/analyze",
+                json={
+                    "code": "def divide(a, b):\n    return a / b",
+                    "bug_description": "Crashes on zero",
+                },
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["mode"] == "gemini"
+            assert data["summary"] == mock_gemini_json["summary"]
+            assert data["suggested_code"] == mock_gemini_json["suggested_code"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_gemini_client_error_handling():
+    """Verifies that Gemini ClientError returns appropriate HTTP status."""
+    from google.genai.errors import ClientError
+
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        GEMINI_API_KEY="invalid-gemini-key",
+    )
+    try:
+        with patch("google.genai.Client") as mock_client_cls:
+            mock_client_instance = MagicMock()
+            mock_client_cls.return_value = mock_client_instance
+            mock_client_instance.models.generate_content.side_effect = ClientError(
+                400,
+                {"error": {"message": "API key not valid. Please pass a valid API key."}},
+            )
+
+            response = client.post(
+                "/api/analyze",
+                json={
+                    "code": "print('hello')",
+                    "bug_description": "Fix bug",
+                },
+            )
+            assert response.status_code == 400
+            assert "API key not valid" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+

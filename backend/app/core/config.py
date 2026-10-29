@@ -5,10 +5,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # Nebius Token Factory Configuration
+    # Google Gemini Configuration
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+
+    # Nebius Token Factory Configuration (Alternative Provider)
     NEBIUS_API_KEY: str = ""
     NEBIUS_BASE_URL: str = "https://api.tokenfactory.nebius.com/v1/"
-    NEBIUS_MODEL: str = "nvidia/Llama-3.1-Nemotron-70B-Instruct-HF"
+    NEBIUS_MODEL: str = "nvidia/Nemotron-3_5-Lightning"
 
     # Server Configuration
     HOST: str = "127.0.0.1"
@@ -35,7 +39,26 @@ class Settings(BaseSettings):
 
     @property
     def is_ai_configured(self) -> bool:
-        return bool(self.NEBIUS_API_KEY and self.NEBIUS_API_KEY.strip())
+        return bool(
+            (self.GEMINI_API_KEY and self.GEMINI_API_KEY.strip())
+            or (self.NEBIUS_API_KEY and self.NEBIUS_API_KEY.strip())
+        )
+
+    @property
+    def active_provider(self) -> str:
+        if self.GEMINI_API_KEY and self.GEMINI_API_KEY.strip():
+            return "gemini"
+        if self.NEBIUS_API_KEY and self.NEBIUS_API_KEY.strip():
+            return "nebius"
+        return "demo"
+
+    @property
+    def active_model(self) -> str:
+        if self.active_provider == "gemini":
+            return self.GEMINI_MODEL
+        if self.active_provider == "nebius":
+            return self.NEBIUS_MODEL
+        return "offline-demo-engine"
 
     model_config = SettingsConfigDict(
         env_file=".env",

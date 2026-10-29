@@ -19,8 +19,9 @@ def get_health(settings: Settings = Depends(get_settings)):
     return HealthResponse(
         status="healthy",
         ai_configured=settings.is_ai_configured,
-        ai_mode="ai" if settings.is_ai_configured else "demo",
-        model=settings.NEBIUS_MODEL,
+        ai_mode=settings.active_provider if settings.is_ai_configured else "demo",
+        ai_provider=settings.active_provider,
+        model=settings.active_model,
         secure_runner_available=secure_available,
     )
 
@@ -32,10 +33,23 @@ def get_config_status(settings: Settings = Depends(get_settings)):
     SECURITY NOTICE: Redacts all credentials and secrets.
     """
     runner = TestRunnerService(settings=settings)
+    provider_name = (
+        "Google Gemini"
+        if settings.active_provider == "gemini"
+        else "Nebius Token Factory"
+        if settings.active_provider == "nebius"
+        else "Offline Demo Engine"
+    )
+    base_url = (
+        "https://generativelanguage.googleapis.com"
+        if settings.active_provider == "gemini"
+        else settings.NEBIUS_BASE_URL
+    )
+
     return ConfigStatusResponse(
-        provider="Nebius Token Factory",
-        base_url=settings.NEBIUS_BASE_URL,
-        model=settings.NEBIUS_MODEL,
+        provider=provider_name,
+        base_url=base_url,
+        model=settings.active_model,
         ai_configured=settings.is_ai_configured,
         demo_mode=not settings.is_ai_configured,
         secure_runner_available=runner.is_docker_available(),

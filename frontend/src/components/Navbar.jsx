@@ -8,7 +8,9 @@ export default function Navbar({
   historyCount = 0,
 }) {
   const isHealthy = health?.status === 'healthy';
-  const isAiMode = health?.ai_mode === 'ai';
+  const isAiMode = isHealthy && Boolean(health?.ai_configured);
+  const isGemini = health?.ai_mode === 'gemini' || health?.ai_provider === 'gemini';
+  const isNebius = health?.ai_mode === 'nebius' || health?.ai_mode === 'ai';
   const secureRunnerAvailable = health?.secure_runner_available;
 
   return (
@@ -73,25 +75,41 @@ export default function Navbar({
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-all ${
               !isHealthy
                 ? 'bg-rose-950/40 border-rose-500/40 text-rose-300'
+                : isGemini
+                ? 'bg-cyan-950/40 border-cyan-500/40 text-cyan-300'
                 : isAiMode
                 ? 'bg-purple-950/40 border-purple-500/40 text-purple-300'
                 : 'bg-amber-950/40 border-amber-500/40 text-amber-300'
             }`}
             title={
               !isHealthy
-                ? 'Backend is not running on port 8000. Running with client-side demo fallback. Start backend with: cd DevShield-AI/backend; uvicorn app.main:app --port 8000'
-                : isAiMode
+                ? 'Backend is offline on port 8000. Operating in offline demo fallback mode.'
+                : isGemini
+                ? `Google Gemini Active (${health?.model || 'gemini-2.5-flash'})`
+                : isNebius
                 ? `Nebius Token Factory Active (${health?.model || 'NVIDIA Nemotron'})`
-                : 'Demo Mode: Live Nebius API key not set. Using intelligent local mock.'
+                : 'Demo Mode: API key not set. Using intelligent local mock.'
             }
           >
             <Cpu className="w-3.5 h-3.5" />
             <span className="font-semibold">
-              {!isHealthy ? 'Backend Offline (Demo Active)' : isAiMode ? 'Nebius AI' : 'Demo Mode'}
+              {!isHealthy
+                ? 'Backend Offline (Demo Active)'
+                : isGemini
+                ? 'Google Gemini'
+                : isNebius
+                ? 'Nebius AI'
+                : 'Demo Mode'}
             </span>
             <span
               className={`w-1.5 h-1.5 rounded-full ${
-                !isHealthy ? 'bg-rose-400' : isAiMode ? 'bg-purple-400 animate-pulse' : 'bg-amber-400'
+                !isHealthy
+                  ? 'bg-rose-400'
+                  : isGemini
+                  ? 'bg-cyan-400 animate-pulse'
+                  : isAiMode
+                  ? 'bg-purple-400 animate-pulse'
+                  : 'bg-amber-400'
               }`}
             />
           </div>
