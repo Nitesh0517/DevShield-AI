@@ -164,6 +164,20 @@ export default function App() {
 
       setTestResult(data);
     } catch (err) {
+      if (!health || health.status === 'offline' || err.message?.includes('Cannot connect')) {
+        setTestResult({
+          status: 'unavailable',
+          secure_mode: false,
+          error_message: 'Docker execution sandbox is offline in this static web deployment. Arbitrary code execution is blocked for security.',
+          passed_count: 0,
+          total_count: payload.tests?.length || 0,
+          results: [],
+          captured_output: '[SECURITY NOTICE] Live Python execution is strictly disabled in the static web deployment. Untrusted code execution requires the local containerized backend (Docker non-root sandbox).',
+          execution_time_ms: 0,
+        });
+        return;
+      }
+
       setTestResult({
         status: 'error',
         secure_mode: false,
