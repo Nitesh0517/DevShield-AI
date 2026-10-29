@@ -225,8 +225,62 @@ class AIService:
         code_lower = request.code.lower()
         bug_lower = request.bug_description.lower()
 
-        # 1. ZeroDivisionError Scenario
-        if "divide" in code_lower or "zero" in bug_lower or "average" in code_lower or "/" in request.code:
+        # 1. Mutable Default Argument Scenario (Check before sequence checks)
+        if "mutable" in bug_lower or "append_audit" in code_lower or "log_entries" in request.code or "=[]" in request.code or "={}" in request.code:
+            return AnalysisResponse(
+                mode="demo",
+                summary="Mutable default argument bug causing unintended state sharing between calls.",
+                root_cause=(
+                    "In Python, default argument expressions like `log_entries=[]` are evaluated only once when "
+                    "the function is defined, not upon each call. Every invocation that uses the default shares "
+                    "the same list instance in memory, causing subsequent calls to retain state from prior calls."
+                ),
+                severity="medium",
+                relevant_code_location="def append_audit_log(event_name, log_entries=[])",
+                suggested_code=(
+                    "def append_audit_log(event_name, log_entries=None):\n"
+                    "    if log_entries is None:\n"
+                    "        log_entries = []\n"
+                    "    log_entries.append(event_name)\n"
+                    "    return log_entries\n"
+                ),
+                explanation=(
+                    "Replaced the mutable list default with the standard `None` sentinel. "
+                    "A fresh empty list is instantiated on every function call when no explicit list is supplied."
+                ),
+                tests=[
+                    TestCase(
+                        name="test_independent_calls_do_not_share_state",
+                        code=(
+                            'first = append_audit_log("EVENT_A")\n'
+                            'second = append_audit_log("EVENT_B")\n'
+                            'assert first == ["EVENT_A"], f"First call corrupted: {first}"\n'
+                            'assert second == ["EVENT_B"], f"Second call retained stale state from first call: {second}"\n'
+                            'assert first is not second, "Separate calls must not share the same list instance"\n'
+                        ),
+                        expected_outcome="pass",
+                    ),
+                    TestCase(
+                        name="test_explicit_existing_log",
+                        code=(
+                            'existing = ["INITIAL_ENTRY"]\n'
+                            'result = append_audit_log("NEW_ENTRY", existing)\n'
+                            'assert result is existing, "Should append to explicitly supplied list"\n'
+                            'assert result == ["INITIAL_ENTRY", "NEW_ENTRY"]\n'
+                        ),
+                        expected_outcome="pass",
+                    ),
+                ],
+                warnings=[
+                    "DEMO MODE: Nebius Token Factory API key is not configured.",
+                ],
+                limitations_and_uncertainty=[
+                    "When an explicit list is provided, it is modified in-place according to Python convention.",
+                ],
+            )
+
+        # 2. ZeroDivisionError Scenario
+        elif "divide" in code_lower or "zero" in bug_lower or "average" in code_lower or "/" in request.code:
             return AnalysisResponse(
                 mode="demo",
                 summary="Unhandled ZeroDivisionError when denominator or participant count is zero.",
@@ -275,8 +329,8 @@ class AIService:
                 ],
             )
 
-        # 2. IndexError / Off-by-one Scenario
-        elif "index" in bug_lower or "out of range" in bug_lower or "last_three" in code_lower or "[" in request.code:
+        # 3. IndexError / Off-by-one Scenario
+        elif "index" in bug_lower or "out of range" in bug_lower or "last_three" in code_lower or "len(" in request.code or "items[" in request.code:
             return AnalysisResponse(
                 mode="demo",
                 summary="Potential IndexError due to fixed negative indexing on short sequences.",
@@ -321,61 +375,6 @@ class AIService:
                 ],
                 limitations_and_uncertainty=[
                     "Preserves list type. If input is a generator or tuple, callers should pass a list or sequence.",
-                ],
-            )
-
-        # 3. Mutable Default Argument Scenario
-        elif "mutable" in bug_lower or "append_audit" in code_lower or "log_entries=[]" in request.code:
-            return AnalysisResponse(
-                mode="demo",
-                summary="Mutable default argument trap causing unintended state persistence across calls.",
-                root_cause=(
-                    "In Python, default parameter values like `log_entries=[]` are evaluated once at function definition time, "
-                    "not at invocation. Subsequent calls mutate the same shared list in memory, leaking prior audit history."
-                ),
-                severity="medium",
-                relevant_code_location="append_audit_log(event_name, log_entries=[])",
-                suggested_code=(
-                    "def append_audit_log(event_name: str, log_entries=None) -> list:\n"
-                    '    """Safely appends an audit log entry using None sentinel pattern."""\n'
-                    "    if log_entries is None:\n"
-                    "        log_entries = []\n"
-                    "    log_entries.append(event_name)\n"
-                    "    return log_entries\n\n"
-                    'if __name__ == "__main__":\n'
-                    '    print(append_audit_log("LOGIN"))\n'
-                    '    print(append_audit_log("LOGOUT"))\n'
-                ),
-                explanation=(
-                    "Adopted the Python standard `None` sentinel idiom. A fresh empty list is allocated per invocation "
-                    "if no explicit collection is passed by the caller."
-                ),
-                tests=[
-                    TestCase(
-                        name="test_independent_invocations",
-                        code=(
-                            'first = append_audit_log("LOGIN")\n'
-                            'second = append_audit_log("LOGOUT")\n'
-                            'assert first == ["LOGIN"], f"First log corrupted: {first}"\n'
-                            'assert second == ["LOGOUT"], f"Second log contains stale state: {second}"\n'
-                        ),
-                        expected_outcome="pass",
-                    ),
-                    TestCase(
-                        name="test_explicit_existing_log",
-                        code=(
-                            'existing = ["INIT"]\n'
-                            'append_audit_log("BOOT", existing)\n'
-                            'assert existing == ["INIT", "BOOT"]\n'
-                        ),
-                        expected_outcome="pass",
-                    ),
-                ],
-                warnings=[
-                    "DEMO MODE: Nebius Token Factory API key is not configured.",
-                ],
-                limitations_and_uncertainty=[
-                    "Function modifies `log_entries` in-place when explicitly provided, which matches Python convention.",
                 ],
             )
 

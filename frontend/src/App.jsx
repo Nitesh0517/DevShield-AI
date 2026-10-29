@@ -4,6 +4,7 @@ import SamplePresets, { SAMPLE_PRESETS } from './components/SamplePresets';
 import CodeDiffView from './components/CodeDiffView';
 import TestRunnerPanel from './components/TestRunnerPanel';
 import HistoryDrawer from './components/HistoryDrawer';
+import { safeApiRequest } from './utils/api';
 import {
   Sparkles,
   Bug,
@@ -52,13 +53,11 @@ export default function App() {
 
   const fetchHealth = async () => {
     try {
-      const res = await fetch('/api/health');
-      if (res.ok) {
-        const data = await res.json();
-        setHealth(data);
-      }
+      const data = await safeApiRequest('/api/health');
+      setHealth(data);
     } catch (err) {
-      console.warn('Backend currently unreachable:', err);
+      console.warn('Backend currently unreachable:', err.message);
+      setHealth((prev) => (prev ? { ...prev, status: 'offline' } : null));
     }
   };
 
@@ -81,19 +80,16 @@ export default function App() {
     setTestResult(null);
 
     try {
-      const res = await fetch('/api/analyze', {
+      const data = await safeApiRequest('/api/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           code: code,
           bug_description: bugDescription,
         }),
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.detail || 'Analysis request failed.');
+      if (!data || typeof data !== 'object') {
+        throw new Error('Analysis response was empty or malformed.');
       }
 
       setAnalysisResult(data);
@@ -102,18 +98,18 @@ export default function App() {
       const newHistoryItem = {
         id: Date.now().toString(),
         timestamp: new Date().toISOString(),
-        mode: data.mode,
+        mode: data.mode || 'demo',
         code: code,
         bug_description: bugDescription,
-        summary: data.summary,
-        root_cause: data.root_cause,
-        severity: data.severity,
-        relevant_code_location: data.relevant_code_location,
-        suggested_code: data.suggested_code,
-        explanation: data.explanation,
-        tests: data.tests,
-        warnings: data.warnings,
-        limitations_and_uncertainty: data.limitations_and_uncertainty,
+        summary: data.summary || 'Code Defect Analysis',
+        root_cause: data.root_cause || '',
+        severity: data.severity || 'medium',
+        relevant_code_location: data.relevant_code_location || null,
+        suggested_code: data.suggested_code || data.proposed_patch || code,
+        explanation: data.explanation || '',
+        tests: data.tests || data.suggested_unit_tests || [],
+        warnings: data.warnings || [],
+        limitations_and_uncertainty: data.limitations_and_uncertainty || [],
       };
       setHistory((prev) => [newHistoryItem, ...prev]);
     } catch (err) {
@@ -126,23 +122,21 @@ export default function App() {
   const handleRunTests = async (payload) => {
     setIsTesting(true);
     try {
-      const res = await fetch('/api/run-tests', {
+      const data = await safeApiRequest('/api/run-tests', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
       setTestResult(data);
     } catch (err) {
       setTestResult({
         status: 'error',
         secure_mode: false,
-        error_message: `Network error connecting to test runner: ${err.message}`,
+        error_message: err.message || 'Error connecting to test runner.',
         passed_count: 0,
         total_count: payload.tests?.length || 0,
         results: [],
-        captured_output: '',
+        captured_output: `[ERROR] ${err.message}`,
         execution_time_ms: 0,
       });
     } finally {

@@ -272,3 +272,61 @@ def test_ai_provider_timeout_error():
             assert "timed out" in response.json()["detail"].lower()
     finally:
         app.dependency_overrides.clear()
+
+
+def test_mutable_default_argument_isolation_proof():
+    """
+    Demonstrates that the defective function shares state,
+    while the corrected implementation provides full isolation between separate calls.
+    """
+    # 1. Defective behavior (shared list)
+    def defective_append(event_name, log_entries=[]):
+        log_entries.append(event_name)
+        return log_entries
+
+    d_first = defective_append("LOGIN")
+    d_second = defective_append("LOGOUT")
+    # Proves the bug exists: second call leaked state from first
+    assert d_first is d_second
+    assert d_second == ["LOGIN", "LOGOUT"]
+
+    # 2. Corrected implementation (isolated sentinel)
+    def append_audit_log(event_name, log_entries=None):
+        if log_entries is None:
+            log_entries = []
+        log_entries.append(event_name)
+        return log_entries
+
+    c_first = append_audit_log("LOGIN")
+    c_second = append_audit_log("LOGOUT")
+    # Proves the fix works: calls are completely isolated
+    assert c_first == ["LOGIN"]
+    assert c_second == ["LOGOUT"]
+    assert c_first is not c_second
+
+    # Explicit list argument behaves correctly
+    custom_log = ["BOOT"]
+    c_third = append_audit_log("HEALTH_CHECK", custom_log)
+    assert c_third is custom_log
+    assert c_third == ["BOOT", "HEALTH_CHECK"]
+
+
+def test_mutable_default_argument_analyze_endpoint():
+    """Verifies that /api/analyze produces the exact fix and tests for mutable default arguments."""
+    buggy_code = (
+        "def append_audit_log(event_name, log_entries=[]):\n"
+        "    log_entries.append(event_name)\n"
+        "    return log_entries\n"
+    )
+    bug_desc = "log_entries retains entries across calls because of mutable default argument []"
+
+    response = client.post(
+        "/api/analyze",
+        json={"code": buggy_code, "bug_description": bug_desc},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "log_entries=None" in data["suggested_code"]
+    assert "def append_audit_log(event_name, log_entries=None):" in data["suggested_code"]
+    assert any("share" in t["code"].lower() or "independent" in t["name"].lower() for t in data["tests"])
+

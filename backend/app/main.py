@@ -3,6 +3,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import get_settings
 from app.api.health import router as health_router
@@ -44,6 +45,15 @@ def top_level_health():
 app.include_router(health_router, prefix="/api", tags=["System"])
 app.include_router(analyze_router, prefix="/api", tags=["AI Agent"])
 app.include_router(test_router, prefix="/api", tags=["Secure Sandbox"])
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """Ensure all HTTP exceptions return structured JSON"""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
 
 
 @app.exception_handler(RequestValidationError)
