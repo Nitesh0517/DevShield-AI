@@ -48,17 +48,30 @@ export default function App() {
   // Fetch backend health status on mount
   useEffect(() => {
     fetchHealth();
-    const interval = setInterval(fetchHealth, 15000);
+    const interval = setInterval(fetchHealth, 5000);
     return () => clearInterval(interval);
   }, []);
 
   const fetchHealth = async () => {
     try {
       const data = await safeApiRequest('/api/health');
-      setHealth(data);
+      if (data && data.status === 'healthy') {
+        setHealth(data);
+      } else {
+        setHealth({ status: 'offline' });
+      }
     } catch (err) {
-      console.warn('Backend currently unreachable:', err.message);
-      setHealth((prev) => (prev ? { ...prev, status: 'offline' } : null));
+      // Try top-level /health as backup
+      try {
+        const backupData = await safeApiRequest('/health');
+        if (backupData && backupData.status === 'healthy') {
+          setHealth(backupData);
+          return;
+        }
+      } catch (backupErr) {
+        // Both failed
+      }
+      setHealth({ status: 'offline' });
     }
   };
 
