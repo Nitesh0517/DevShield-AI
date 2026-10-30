@@ -291,6 +291,14 @@ For hackathon judges and evaluators, follow this concise demonstration structure
 
 ---
 
-## 12. License
+## 12. Team Members
+
+* **Nitesh Barnwal**
+* **Vijay Baranawal**
+* **Rupansha Saha**
+
+---
+
+## 13. License
 
 Distributed under the **MIT License**. See `LICENSE` for more information.
