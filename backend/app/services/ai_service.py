@@ -307,32 +307,42 @@ class AIService:
 
     def _extract_json(self, raw_text: str) -> Dict[str, Any]:
         cleaned = raw_text.strip()
-        # Strip thinking/reasoning tags if present (<think>...</think>)
+        # 1. Strip thinking/reasoning tags if present (<think>...</think>)
         cleaned = re.sub(r"<think>.*?</think>", "", cleaned, flags=re.DOTALL).strip()
 
-        # 1. First look for fenced markdown json blocks: ```json { ... } ```
-        code_block = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
-        if code_block:
-            try:
-                return json.loads(code_block.group(1).strip())
-            except json.JSONDecodeError:
-                pass
-
-        # 2. Extract outermost matching { ... }
-        start_idx = cleaned.find("{")
-        end_idx = cleaned.rfind("}")
-        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-            candidate = cleaned[start_idx : end_idx + 1]
-            try:
-                return json.loads(candidate.strip())
-            except json.JSONDecodeError:
-                pass
-
-        # 3. Direct JSON parse
+        # 2. Try direct JSON parse first
         try:
-            return json.loads(cleaned)
+            d = json.loads(cleaned)
+            if isinstance(d, dict):
+                return d
         except json.JSONDecodeError:
             pass
+
+        # 3. Look for fenced markdown json blocks: ```json { ... } ``` (from last to first)
+        code_blocks = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
+        for block in reversed(code_blocks):
+            try:
+                d = json.loads(block.strip())
+                if isinstance(d, dict) and ("summary" in d or "suggested_code" in d):
+                    return d
+            except json.JSONDecodeError:
+                pass
+
+        # 4. Extract any valid JSON object containing required keys even if embedded in thinking text
+        starts = [i for i, ch in enumerate(cleaned) if ch == "{"]
+        ends = [i for i, ch in enumerate(cleaned) if ch == "}"]
+
+        for s in starts:
+            for e in reversed(ends):
+                if e > s:
+                    candidate = cleaned[s : e + 1]
+                    if '"summary"' in candidate or '"suggested_code"' in candidate:
+                        try:
+                            d = json.loads(candidate)
+                            if isinstance(d, dict) and ("summary" in d or "suggested_code" in d):
+                                return d
+                        except json.JSONDecodeError:
+                            pass
 
         logger.error(f"Failed to decode AI response as JSON. Content: {raw_text[:400]}...")
         raise HTTPException(
