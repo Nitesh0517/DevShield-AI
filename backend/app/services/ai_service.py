@@ -45,17 +45,17 @@ class AIService:
         return self.get_nebius_client()
 
     def analyze(self, request: AnalysisRequest) -> AnalysisResponse:
-        # 1. Check for configured Google Gemini API key
-        if self.settings.GEMINI_API_KEY and self.settings.GEMINI_API_KEY.strip():
-            logger.info(f"Using Google Gemini model: '{self.settings.GEMINI_MODEL}'")
-            return self._call_gemini_ai(request)
-
-        # 2. Check for configured Nebius Token Factory API key
+        # 1. Check for configured Nebius Token Factory API key (Primary for Nebius × NVIDIA Hackathon)
         if self.settings.NEBIUS_API_KEY and self.settings.NEBIUS_API_KEY.strip():
             logger.info(f"Using Nebius Token Factory model: '{self.settings.NEBIUS_MODEL}'")
             nebius_client = self.get_nebius_client()
             if nebius_client:
                 return self._call_nebius_ai(nebius_client, request)
+
+        # 2. Check for configured Google Gemini API key (Alternative Provider)
+        if self.settings.GEMINI_API_KEY and self.settings.GEMINI_API_KEY.strip():
+            logger.info(f"Using Google Gemini model: '{self.settings.GEMINI_MODEL}'")
+            return self._call_gemini_ai(request)
 
         # 3. Fallback to deterministic offline demo response
         logger.info("No AI provider API key configured. Operating in DEMO mode.")

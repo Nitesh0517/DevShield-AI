@@ -47,10 +47,10 @@ class Settings(BaseSettings):
 
     @property
     def active_provider(self) -> str:
-        if self.GEMINI_API_KEY and self.GEMINI_API_KEY.strip():
-            return "gemini"
         if self.NEBIUS_API_KEY and self.NEBIUS_API_KEY.strip():
             return "nebius"
+        if self.GEMINI_API_KEY and self.GEMINI_API_KEY.strip():
+            return "gemini"
         return "demo"
 
     @property
